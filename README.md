@@ -2,7 +2,7 @@
 
 **Contribution Number:** 1   
 **Student:** Satvik Agarwal  
-**Issue:** https://github.com/defold/defold/issues/11267#issuecomment-4645980402  
+**Issue:** https://github.com/defold/defold/issues/11267
 **Status:** Phase I Complete  
 
 ---
