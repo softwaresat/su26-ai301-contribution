@@ -1,9 +1,9 @@
 # Contribution #1: Exclude files from Searches | Mark directories as excluded
 
-**Contribution Number:** 1 
-**Student:** Satvik Agarwal
-**Issue:** https://github.com/defold/defold/issues/11267#issuecomment-4645980402
-**Status:** Phase I Complete
+**Contribution Number:** 1   
+**Student:** Satvik Agarwal  
+**Issue:** https://github.com/defold/defold/issues/11267#issuecomment-4645980402  
+**Status:** Phase I Complete  
 
 ---
 
