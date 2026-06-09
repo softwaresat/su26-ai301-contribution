@@ -1,15 +1,15 @@
-# Contribution [#]: [Issue Title]
+# Contribution #1: Exclude files from Searches | Mark directories as excluded
 
-**Contribution Number:** [1 / 2 / 3]  
-**Student:** [Your Name]  
-**Issue:** [GitHub issue link]  
-**Status:** [Phase I / Phase II / Phase III / Phase IV] [In Progress / Complete]
+**Contribution Number:** 1 
+**Student:** Satvik Agarwal
+**Issue:** https://github.com/defold/defold/issues/11267#issuecomment-4645980402
+**Status:** Phase I Complete
 
 ---
 
 ## Why I Chose This Issue
 
-[1-2 paragraphs explaining why this issue interests you, how it matches your skills/learning goals, what you hope to learn]
+I chose this issue because I have experience using Unity with C# to develop 2D games in my free time, and Defold seems like a healthy lightweight alternative empowering many developers. I have experience with C/C++ from class, but would like to strengthen my skills in a production environment. I hope to learn how to understand complex public repositories in C++ and how to effectively contribute to open source with my agentic programming skills. 
 
 ---
 
@@ -17,7 +17,7 @@
 
 ### Problem Description
 
-[In your own words, what's broken or missing?]
+When game developers search for files or import assets into the engine, the file explorer currently displays all directories, which makes it cumbersome to locate a specific file. Developers want the option to exclude selected directories so they can focus on relevant paths only. This requires adding directory-exclusion support to both file search and general navigation within the file explorer of the editor. 
 
 ### Expected Behavior
 
