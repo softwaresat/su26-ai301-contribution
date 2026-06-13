@@ -41,7 +41,7 @@ Setting up my local development environment was challenging, since there wasn't 
 
 ### Steps to Reproduce
 
-1. Launch development build of Defold editor using ```lein run```  
+1. Launch development build of Defold editor using ```lein run```  in the ```defold/editor/``` directory   
 2. Create or open an empty project workspace  
 3. Put a directory without assets in the /builtin directory of the project  
 4. Press ```CTRL + P``` to open the Open Asset modal  
@@ -59,27 +59,30 @@ Setting up my local development environment was challenging, since there wasn't 
 
 ### Analysis
 
-[Your analysis of the root cause - what's causing the issue?]
+There is no functionality to exclude directories from the open assets explorer.   
 
 ### Proposed Solution
 
-[High-level description of your fix approach]
+First create a UI text input for users to specify what directories to exclude. Then implement filtering logic in the same code that loads assets for the Open Assets function, and implement filtering based on the specified paths.   
 
 ### Implementation Plan
 
 Using UMPIRE framework (adapted):
 
-**Understand:** [Restate the problem]
+**Understand:** Implement a feature to filter out directories listed in a user-defined exclusion input   
 
-**Match:** [What similar patterns/solutions exist in the codebase?]
+**Match:** There is a file called .defignore that is used to exclude directories from the game completely, but it also excludes them from compilation, which is not what we want.   
 
 **Plan:** [Step-by-step implementation plan]
-1. [Modify file X to do Y]
-2. [Add function Z]
-3. [Update tests]
+1. Update UI field by finding where game.project properties map is defined in ```src/clojure/editor/project.clj``` and adding a new text input property called exclude_dirs      
+2. Add functionality to normalize text inputs (eg. tests vs. /tests)   
+3. Find the function where the editor initializes the workspace instance and include my array in a configuration map under a key like ```:excluded-directories```   
+4. In ```src/clojure/editor/workspace.clj```, add a helper function that checks if a path starts with any of the strings listed in the excluded directories array.
+5. Scrolling down to ```(g/defnode Workspace ...)```, add a new property to handle dynamic updates during file sychronization.    
+6. Where the code defines ```resource-list```, insert a filtering sequence to strip out any file element whose path returns true for my predicate.   
+7. Verify and test branch flow by doing manual testing.   
 
-**Implement:** [Link to your branch/commits as you work]
-
+**Implement:** (https://github.com/softwaresat/defold/tree/Issue-11267-Exclude-File-From-Searches)      
 **Review:** [Self-review checklist - does it follow the project's contribution guidelines?]
 
 **Evaluate:** [How will you verify it works?]
