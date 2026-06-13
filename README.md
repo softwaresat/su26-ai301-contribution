@@ -37,17 +37,19 @@ When game developers search for files or import assets into the engine, the file
 
 ### Environment Setup
 
-[Notes on setting up your local development environment - challenges you faced, how you solved them]
+Setting up my local development environment was challenging, since there wasn't clear documentation on all the dependencies I needed and what process I needed to follow to start development. The documentation provided information on how to install development tools such as Visual Studio with the C++ extensions, SDK, and Lein for working on the editor. However, it wasn't explicit on how to use these tools to start Defold. One challenge I had was that to start the Defold editor, Lein expected me to build the engine from source. CMake wasn't working properly in the system, so I had to look around online for prebuilt binaries, since my work was primarily on the editor and not the engine. The editor would also only start if these files I found online were put in specific places, so I had to manually make these directories and place files.  
 
 ### Steps to Reproduce
 
-1. [Step 1]
-2. [Step 2]
-3. [Observed result]
+1. Launch development build of Defold editor using ```lein run```  
+2. Create or open an empty project workspace  
+3. Put a directory without assets in the /builtin directory of the project  
+4. Press ```CTRL + P``` to open the Open Asset modal  
+5. You will find the folder you placed, and have no way of excluding it  
 
 ### Reproduction Evidence
 
-- **Commit showing reproduction:** [Link to commit in your fork]
+- **Commit showing reproduction:** (https://github.com/softwaresat/defold)  
 - **Screenshots/logs:** [If applicable]
 - **My findings:** [What you discovered during reproduction]
 
