@@ -74,18 +74,32 @@ Using UMPIRE framework (adapted):
 **Match:** There is a file called .defignore that is used to exclude directories from the game completely, but it also excludes them from compilation, which is not what we want.   
 
 **Plan:** [Step-by-step implementation plan]
-1. Update UI field by finding where game.project properties map is defined in ```src/clojure/editor/project.clj``` and adding a new text input property called exclude_dirs      
-2. Add functionality to normalize text inputs (eg. tests vs. /tests)   
-3. Find the function where the editor initializes the workspace instance and include my array in a configuration map under a key like ```:excluded-directories```   
-4. In ```src/clojure/editor/workspace.clj```, add a helper function that checks if a path starts with any of the strings listed in the excluded directories array.
-5. Scrolling down to ```(g/defnode Workspace ...)```, add a new property to handle dynamic updates during file sychronization.    
-6. Where the code defines ```resource-list```, insert a filtering sequence to strip out any file element whose path returns true for my predicate.   
-7. Verify and test branch flow by doing manual testing.   
+1. Add [:search :exclude-patterns] (array of [pattern enabled] pairs) and [:search :filtering] (boolean) to the prefs schema so they persist in .editor_settings per project.   
+2. Extend make-select-list-dialog to accept :extra-initial-state, :extra-event-handler, :refilter-atom, and :header-extra-desc-fn so callers can inject sidebar UI and custom events without touching the dialog internals.   
+3. In resource-dialog/make, when the caller supplies :exclude-patterns-atom and related atoms, build a filter button that opens a cljfx popup (checkbox list + add text field), mount it via header-extra-desc-fn, and apply patterns inside the existing filter-fn by reading from the atom on every filter call. Wire a refilter-atom so popup changes immediately re run the filter.    
+4. In the add handler, normalise !exclude dirname $\rightarrow$ store as dirname (stripping the ! entirely since all stored patterns are exclusions by definition). Write compile-exclude-pred as a simple substring match predicate over [pattern enabled] pairs with no ! needed.   
+5. In query-and-open!, create the atoms from prefs on open, provide save back callbacks, and pass everything through to resource-dialog/make.   
+6. Apply the same patterns to Search in Files by accepting exclude-patterns in make-search-data-future and reading them from prefs in search_results_view.   
+7. Write unit tests for compile-exclude-pred and integration tests for make-search-data-future with patterns.   
 
 **Implement:** (https://github.com/softwaresat/defold/tree/Issue-11267-Exclude-File-From-Searches)      
-**Review:** [Self-review checklist - does it follow the project's contribution guidelines?]
+**Review:** 
+1. Are the new :exclude-patterns and :filtering preferences schema updates clean, backward-compatible, and properly namespaced?   
+2. Does the refactoring of make-select-list-dialog keep the core dialog components modular without introducing regression or code smell?   
+3. Is the atom lifecycle cleanly managed inside query-and-open! to ensure state resets correctly upon closing and reopening the asset dialog?   
+4. Are UI interactions snappy, ensuring that updating checkboxes or adding a string pattern instantly triggers the refilter-atom sequence without UI lag?   
 
-**Evaluate:** [How will you verify it works?]
+**Evaluate:** 
+Manual UI Testing:
+1. Open the updated project and access the Open Assets/Resource dialog window. Ensure the new filter button mounts cleanly via header-extra-desc-fn.   
+2. Click the filter button to open the ClojureFX popup. Input an exclusion directory pattern (e.g., test input variations like !exclude tests or /tests) and verify that normalization strips the ! and handles strings correctly.   
+3. Toggle individual patterns on and off in the checkbox list. Verify that the asset list updates immediately to hide or reveal matching directories.   
+4. Trigger a "Search in Files" command using the exact same exclusion patterns to confirm that the future results filtering in search_results_view aligns with the dialog view.   
+5. Close and reopen the editor to confirm that the exclusion patterns persist accurately inside .editor_settings.
+
+Automated Testing:
+1. Execute the new Clojure unit tests targeting compile-exclude-pred against a variety of matching substring test cases.   
+2. Execute the integration test suite targeting make-search-data-future to guarantee multi-threaded search results are filtered robustly under simulated background conditions.   
 
 ---
 
@@ -93,24 +107,47 @@ Using UMPIRE framework (adapted):
 
 ### Unit Tests
 
-- [ ] Test case 1: [Description]
-- [ ] Test case 2: [Description]
-- [ ] Test case 3: [Description]
+- [x] Test case 1: compile-exclude-pred with nil/empty patterns returns nil (no filtering)   
+- [x] Test case 2: compile-exclude-pred with all-disabled patterns returns nil   
+- [x] Test case 3: Single enabled pattern hides resources whose proj-path contains the substring
+- [x] Test case 4: Disabled pattern does not exclude anything
+- [x] Test case 5: Multiple enabled patterns exclude all matching resources (any match hides)
+- [x] Test case 6: Mix of enabled/disabled: only enabled ones filter
+- [x] Test case 7: Pattern with no matches shows everything
+- [x] Test case 8: Empty string pattern is ignored
+- [x] Test case 9: Single-pattern fast path (first preds) works correctly (regression guard)   
+- [x] Test case 10: Three-pattern path uses every-pred correctly
 
 ### Integration Tests
 
-- [ ] Integration scenario 1
-- [ ] Integration scenario 2
+- [x] Integration scenario 1: make-search-data-future with nil patterns returns full file set   
+- [x] Integration scenario 2: make-search-data-future with empty patterns returns full file set   
+- [x] Integration scenario 3: Enabled pattern removes files whose proj-path contains the substring, leaves others   
+- [x] Integration scenario 4: Disabled pattern leaves full file set unchanged   
+- [x] Integration scenario 5: Multiple enabled patterns each independently filter matching files   
+- [x] Integration scenario 6: Mix of enabled/disabled: only enabled ones reduce the result set   
+- [x] Integration scenario 7: Pattern matching nothing returns full file set unchanged   
 
 ### Manual Testing
 
-[What you tested manually and results]
+Tested the Open Assets dialog (Ctrl+P / Cmd+P):   
+- "Filter" button appears to the right of the search box with correct toolbar styling   
+- Clicking it opens a popup anchored below the button   
+- "Enable filtering" checkbox at the top toggles filtering globally; state persists across dialog opens   
+- Adding !exclude main stores main in the list (no ! displayed)   
+- Adding without !exclude prefix is silently ignored   
+- Checkbox per item enables/disables individual patterns   
+- Clicking the × button removes a pattern; list disappears when empty   
+- With items enabled, matching files are absent from the search results immediately   
+- Prompt text "Add filter (e.g. !exclude main)" is readable (220px min-width enforced)   
+- Patterns and filtering-enabled state survive closing and reopening the dialog (persisted to .editor_settings)   
+- Search in Files also respects the saved patterns   
 
 ---
 
 ## Implementation Notes
 
-### Week [X] Progress
+### Week [3] Progress
 
 [What you built this week, challenges faced, decisions made]
 
@@ -120,9 +157,32 @@ Using UMPIRE framework (adapted):
 
 ### Code Changes
 
-- **Files modified:** [List]
-- **Key commits:** [Links to important commits]
-- **Approach decisions:** [Why you chose certain approaches]
+- **Files modified:**    
+    - src/clj/editor/prefs.clj   
+    - src/clj/editor/dialogs.clj   
+    - src/clj/editor/resource_dialog.clj   
+    - src/clj/editor/app_view.clj   
+    - src/clj/editor/defold_project_search.clj   
+    - src/clj/editor/search_results_view.clj   
+    - test/editor/resource_dialog_test.clj (new)   
+    - test/editor/defold_project_search_test.clj   
+- **Key commits:**
+1. add search.exclude-patterns and search.filtering to project prefs schema   
+2. extend make-select-list-dialog with extra-state, extra-event-handler, refilter-atom, and header-extra-desc-fn   
+3. add exclude-patterns filter popup to Open Assets dialog with per-pattern enable/disable and global toggle   
+4. wire exclude-patterns and filtering-enabled prefs into query-and-open!   
+5. apply exclude-patterns filter to Search in Files results   
+6. add unit and integration tests for exclude-patterns filtering   
+   
+- **Approach decisions:**
+
+Pattern format — Patterns are stored as [pattern-string enabled-boolean] pairs to match the console filter's data model exactly, enabling per-item toggle without changing the prefs schema shape later. The ! prefix is stripped at input time (not stored) because all entries are exclusions by definition — the !exclude syntax is just the user-facing convention.
+
+Refilter mechanism — make-select-list-dialog was extended with a :refilter-atom that gets filled with a function to force re-filter by temporarily setting :filter-term to a sentinel value, bypassing the equality dedup check. This avoids nested swap! issues by deferring the refilter call via ui/run-later.
+
+Popup positioning — Uses window-top-left anchor location (opposite of the console which uses window-bottom-left) because the filter button is in the dialog header (top) rather than a toolbar at the bottom of the screen.
+
+CSS — Popup content explicitly loads editor.css via :stylesheets because popups are separate JavaFX windows that don't inherit the parent scene's stylesheet. The button itself uses hardcoded hex values from the editor palette rather than CSS variable references, since CSS variables are only resolved if the dialog scene has the stylesheet loaded.
 
 ---
 
