@@ -149,7 +149,7 @@ Tested the Open Assets dialog (Ctrl+P / Cmd+P):
 
 ### Week [3] Progress
 
-[What you built this week, challenges faced, decisions made]
+I implemented all of the functionality needed this week. In my experience, the backend logic was the easiest part because most of it was adapted from other parts of the code that also filtered. The hardeset part for me was utilizing the AI to assist in creating the UI component, it had trouble aligning the checkbox and having the dropdown aesthetically pleasing.
 
 ### Week [Y] Progress
 
@@ -188,15 +188,34 @@ CSS — Popup content explicitly loads editor.css via :stylesheets because popup
 
 ## Pull Request
 
-**PR Link:** [GitHub PR URL when submitted]
+**PR Link:** (https://github.com/defold/defold/pull/12657)
 
-**PR Description:** [Draft or final PR description - much of the content above can be adapted]
+**PR Description:** 
+Adds per-project editor search exclusion patterns for Open Asset and Search in Files. In the Open Asset dialog, users can open a filter dropdown, add directory or path patterns to exclude, and see each added exclusion as an entry in the dropdown. Each exclusion can be enabled or disabled with a checkbox, removed when no longer needed, and filtering can also be turned on or off globally. The exclusions are saved per project in .editor_settings, so they persist between editor sessions without affecting game.project, builds, bundling, or runtime behavior.
+
+Fixes #11267
+
+This is opened as a draft PR to make the proposed approach easier to review before final polishing.
+
+### Technical Changes
+
+- Adds [:search :exclude-patterns] as an array of [pattern enabled] pairs and [:search :filtering] as a boolean to the prefs schema, persisted per project in .editor_settings.
+- Extends make-select-list-dialog with :extra-initial-state, :extra-event-handler, :refilter-atom, and :header-extra-desc-fn so callers can add sidebar/header UI and custom events without changing the dialog internals.
+- Updates resource-dialog/make to optionally build an exclusion filter UI when supplied with exclusion-pattern atoms. The UI uses a cljfx popup with an enabled checkbox list and add-pattern text field.
+- Applies exclusion patterns inside the existing resource dialog filter-fn, reading from the exclusion-patterns atom on each filter call.
+- Uses a refilter-atom so changes made in the popup immediately rerun filtering.
+- Normalizes added exclusions by storing the pattern directly, without a leading !, since all stored patterns are exclusions by definition.
+- Adds compile-exclude-pred as a simple predicate over enabled pattern pairs.
+- Creates and saves exclusion-pattern prefs through query-and-open!, then passes the required atoms and callbacks through to resource-dialog/make.
+- Applies the same exclusion patterns to Search in Files by accepting exclude patterns in make-search-data-future and reading them from prefs in search_results_view.
+- Adds tests for exclusion predicate behavior and Search in Files filtering.
+
 
 **Maintainer Feedback:**
 - [Date]: [Summary of feedback received]
 - [Date]: [How you addressed it]
 
-**Status:** [Awaiting review / Iterating / Approved / Merged]
+**Status:** Awaiting review
 
 ---
 
