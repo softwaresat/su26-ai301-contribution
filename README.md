@@ -151,9 +151,13 @@ Tested the Open Assets dialog (Ctrl+P / Cmd+P):
 
 I implemented all of the functionality needed this week. In my experience, the backend logic was the easiest part because most of it was adapted from other parts of the code that also filtered. The hardeset part for me was utilizing the AI to assist in creating the UI component, it had trouble aligning the checkbox and having the dropdown aesthetically pleasing.
 
-### Week [Y] Progress
+### Week [5] Progress
 
-[Continue documenting as you work]
+This week I received initial maintainer feedback on my draft pull request and implemented all of the requested changes. I removed the stray unintended file change and refactored the Open Assets filtering state so that the exclusion patterns, popup state, and global filtering flag use the dialog's existing cljfx state map instead of multiple side-channel atoms. The popup now updates and re-filters through the normal cljfx rendering cycle without a separate refilter atom.
+
+I also replaced raw substring matching with a shared whole-path-segment predicate in editor.resource. An exclusion such as `test` now removes resources inside a `/test/` directory without incorrectly removing unrelated files such as `latest_scores.lua` or paths such as `/testing/`. Both Open Asset and Search in Files now use the same shared predicate, and I added regression tests for whole-segment and multi-segment directory matching. I pushed the updated changes to PR #12657 and am waiting for follow-up review from the Defold maintainers.
+
+I also identified Intel LLVM issue #22581 as a possible next contribution. Since the issue contains three deprecated oneAPI extensions and recommends handling each extension in a separate pull request, I asked the maintainers which individual extension would be most suitable for a first-time contributor and whether I could be assigned to it. I am currently waiting for their response before beginning implementation.
 
 ### Code Changes
 
@@ -163,6 +167,8 @@ I implemented all of the functionality needed this week. In my experience, the b
     - src/clj/editor/resource_dialog.clj   
     - src/clj/editor/app_view.clj   
     - src/clj/editor/defold_project_search.clj   
+    - src/clj/editor/recent_files.clj   
+    - src/clj/editor/resource.clj   
     - src/clj/editor/search_results_view.clj   
     - test/editor/resource_dialog_test.clj (new)   
     - test/editor/defold_project_search_test.clj   
@@ -173,12 +179,13 @@ I implemented all of the functionality needed this week. In my experience, the b
 4. wire exclude-patterns and filtering-enabled prefs into query-and-open!   
 5. apply exclude-patterns filter to Search in Files results   
 6. add unit and integration tests for exclude-patterns filtering   
+7. fix exclude patterns to match whole path segments, not substrings   
    
 - **Approach decisions:**
 
-Pattern format — Patterns are stored as [pattern-string enabled-boolean] pairs to match the console filter's data model exactly, enabling per-item toggle without changing the prefs schema shape later. The ! prefix is stripped at input time (not stored) because all entries are exclusions by definition — the !exclude syntax is just the user-facing convention.
+Pattern format — Patterns are stored as [pattern-string enabled-boolean] pairs to match the console filter's data model, enabling each entry to be toggled without changing the prefs schema shape. Inputs are trimmed and stored directly as directory or path patterns. Matching is performed against complete `/`-separated path segments so a pattern such as `test` matches `/test/foo.lua` but not `latest_scores.lua` or `/testing/foo.lua`.
 
-Refilter mechanism — make-select-list-dialog was extended with a :refilter-atom that gets filled with a function to force re-filter by temporarily setting :filter-term to a sentinel value, bypassing the equality dedup check. This avoids nested swap! issues by deferring the refilter call via ui/run-later.
+State and refilter mechanism — The exclusion patterns, popup state, and global filtering flag are stored as keys in the select-list dialog's existing cljfx state map. The dialog's :filter-key-fn includes the filter term, exclusion patterns, and filtering flag, so popup changes trigger normal re-rendering and re-filtering without a separate side-channel refilter atom.
 
 Popup positioning — Uses window-top-left anchor location (opposite of the console which uses window-bottom-left) because the filter button is in the dialog header (top) rather than a toolbar at the bottom of the screen.
 
@@ -212,10 +219,10 @@ This is opened as a draft PR to make the proposed approach easier to review befo
 
 
 **Maintainer Feedback:**
-- [Date]: [Summary of feedback received]
-- [Date]: [How you addressed it]
+- July 14, 2026: Received initial feedback to remove a stray unintended file change, reduce the four atoms previously created in query-and-open!, integrate the filter state into the cljfx rendering mechanism, and replace raw substring matching with actual directory/path-segment matching.
+- July 14, 2026: Addressed the feedback by removing the stray change, moving the popup and exclusion state into the dialog's existing state map, eliminating the side-channel refilter atom, extracting the shared editor.resource/compile-exclude-patterns-pred function, applying it to both Open Asset and Search in Files, and adding regression tests for whole and multi-segment paths.
 
-**Status:** Awaiting review
+**Status:** Awaiting follow-up review after implementing initial feedback
 
 ---
 
