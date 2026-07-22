@@ -272,15 +272,27 @@ This is opened as a draft PR to make the proposed approach easier to review befo
 
 ### Technical Skills Gained
 
-[What you learned technically]
+This contribution taught me how state and rendering interact in a production Clojure and cljfx application. My first implementation used several atoms and a separate refilter mechanism because that was the most direct way to make the popup update the asset list. After receiving feedback, I learned how to represent the exclusion patterns, popup state, and filtering toggle inside the dialog's existing state map so changes flow through the normal cljfx rendering cycle.
+
+I also gained experience designing reusable editor components. When the same filtering controls were needed in both Open Asset and Search in Files, I extracted the popup rendering, event handling, badge calculation, and preference callbacks into a shared `editor.filter-popup` namespace instead of duplicating the code. I learned how to persist shared project preferences, localize user-facing editor text, restart asynchronous searches when their configuration changes, and write regression tests for path matching and UI event behavior.
+
+The directory-matching feedback also improved my understanding of edge cases in path handling. A raw substring check appeared to work initially, but it incorrectly treated filenames such as `latest_scores.lua` and directories such as `/testing/` as matches for `test`. I replaced it with whole-path-segment matching and added tests that protect against those false positives.
 
 ### Challenges Overcome
 
-[What was hard and how you solved it]
+The hardest challenge was keeping two separate search interfaces consistent while preserving their existing behavior. Open Asset used a cljfx-based dialog, while Search in Files had its own controls, preferences, and active search lifecycle. I had to unify the settings without creating two competing sources of truth. I solved this by placing the custom patterns, global toggle, library option, and hidden-file option under shared search preferences and using the same popup component from both interfaces.
+
+Another challenge was responding to architectural feedback without only patching the visible symptoms. The first review identified problems with side-channel atoms and substring matching. The second review expanded the feature to include localization, shared UI access, global settings, default exclusions, and live restarting of Search in Files. Addressing these requests required resolving merge conflicts, refactoring earlier code, and updating tests while keeping the feature functional throughout the changes.
+
+I also learned that an implementation can satisfy the original functional request while still needing substantial refinement to fit the architecture and user experience of an established project. The maintainer's manual testing exposed inconsistencies that my initial tests did not cover, especially the global-toggle behavior across dialogs.
 
 ### What I'd Do Differently Next Time
 
-[Reflection on your process]
+I would ask maintainers about cross-interface behavior and UI expectations before building the first complete version. In particular, I would clarify whether settings should be global, whether every affected interface needs direct access to the controls, and whether existing options such as library filtering should be incorporated into the new design. This could have prevented the initial Open Asset-only popup and reduced later rework.
+
+I would also study the repository's state-management and localization patterns more deeply before implementing the UI. That likely would have led me to the shared cljfx state-map approach earlier instead of introducing multiple atoms and a separate refilter mechanism.
+
+Finally, I would keep the pull-request description synchronized after every major refactor and create regression tests from each piece of reviewer feedback immediately. This would make the review history easier to follow and ensure that corrected behavior, such as global toggles and whole-segment path matching, cannot regress later.
 
 ---
 
