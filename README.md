@@ -117,6 +117,12 @@ Automated Testing:
 - [x] Test case 8: Empty string pattern is ignored
 - [x] Test case 9: Single-pattern fast path (first preds) works correctly (regression guard)   
 - [x] Test case 10: Three-pattern path uses every-pred correctly
+- [x] Test case 11: hidden-path-segment? detects dot-prefixed files and directories
+- [x] Test case 12: hidden-path-segment? detects nested hidden paths
+- [x] Test case 13: hidden-path-segment? does not treat a dot in the middle of a segment as hidden
+- [x] Test case 14: filter-popup badge count reflects active default and custom exclusions
+- [x] Test case 15: filter-popup event handler covers adding, toggling, and removing patterns
+- [x] Test case 16: filter-popup event handler invokes filtering, library, and hidden-setting callbacks
 
 ### Integration Tests
 
@@ -142,6 +148,12 @@ Tested the Open Assets dialog (Ctrl+P / Cmd+P):
 - Prompt text "Add filter (e.g. !exclude main)" is readable (220px min-width enforced)   
 - Patterns and filtering-enabled state survive closing and reopening the dialog (persisted to .editor_settings)   
 - Search in Files also respects the saved patterns   
+- Search in Files now includes the same Filter button and popup as Open Asset   
+- Disabling "Enable filtering" from either dialog disables custom patterns in both dialogs   
+- Changes to patterns or filter toggles while Search in Files is open restart the search with the new settings   
+- The pinned "Libraries" option replaces the old standalone "Search Inside Libraries" checkbox   
+- The pinned "Hidden Files" option excludes dot-prefixed files and directories such as `.vscode/`   
+- Filter labels and prompt text are loaded from the English localization resources   
 
 ---
 
@@ -159,11 +171,22 @@ I also replaced raw substring matching with a shared whole-path-segment predicat
 
 I also identified Intel LLVM issue #22581 as a possible next contribution. Since the issue contains three deprecated oneAPI extensions and recommends handling each extension in a separate pull request, I asked the maintainers which individual extension would be most suitable for a first-time contributor and whether I could be assigned to it. I am currently waiting for their response before beginning implementation.
 
+### Week [6] Progress
+
+This week I received a second round of detailed maintainer feedback after Joseph cloned my branch and manually tested the feature. I first resolved the new merge conflicts with the latest `dev` branch. I then localized the previously hardcoded UI text for "Filter," "Enable filtering," and the add-pattern prompt by adding the strings to the English editor localization resources.
+
+I fixed the inconsistent behavior between Open Asset and Search in Files by giving Search in Files the same Filter button and popup as Open Asset. Both dialogs now share the same exclusion patterns, global filtering toggle, library setting, and hidden-file setting, so changes made from either dialog affect both search interfaces. Disabling "Enable filtering" now prevents custom exclusion patterns from filtering Search in Files as expected, and changing a filter while Search in Files is open rebuilds and restarts the search with the new settings.
+
+I also unified the existing "Search Inside Libraries" behavior into the shared filter popup as a pinned "Libraries" option and added a pinned "Hidden Files" option for dot-prefixed files and folders such as `.vscode/`. To avoid duplicating the popup UI and event logic between the two dialogs, I extracted a shared `editor.filter-popup` namespace. I added unit tests for hidden-path detection and the shared popup's event handling, including add, toggle, remove, and preference callback behavior. I pushed all of these changes to PR #12657 and am waiting for another round of maintainer review.
+
 ### Code Changes
 
 - **Files modified:**    
+    - resources/localization/en.editor_localization   
+    - resources/search-in-files-dialog.fxml   
     - src/clj/editor/prefs.clj   
     - src/clj/editor/dialogs.clj   
+    - src/clj/editor/filter_popup.clj (new)   
     - src/clj/editor/resource_dialog.clj   
     - src/clj/editor/app_view.clj   
     - src/clj/editor/defold_project_search.clj   
@@ -172,6 +195,8 @@ I also identified Intel LLVM issue #22581 as a possible next contribution. Since
     - src/clj/editor/search_results_view.clj   
     - test/editor/resource_dialog_test.clj (new)   
     - test/editor/defold_project_search_test.clj   
+    - test/editor/filter_popup_test.clj (new)   
+    - test/editor/resource_test.clj   
 - **Key commits:**
 1. add search.exclude-patterns and search.filtering to project prefs schema   
 2. extend make-select-list-dialog with extra-state, extra-event-handler, refilter-atom, and header-extra-desc-fn   
@@ -180,12 +205,26 @@ I also identified Intel LLVM issue #22581 as a possible next contribution. Since
 5. apply exclude-patterns filter to Search in Files results   
 6. add unit and integration tests for exclude-patterns filtering   
 7. fix exclude patterns to match whole path segments, not substrings   
+8. add hidden-path-segment? predicate and exclude-hidden? support to search   
+9. extract shared editor.filter-popup namespace   
+10. add shared exclude-libraries and exclude-hidden prefs and wire them into Open Asset   
+11. update Open Asset to use the shared filter popup with Libraries and Hidden Files defaults   
+12. add the shared exclusion filter popup to Search in Files and synchronize its state with Open Asset   
+13. add unit tests for hidden-path detection and editor.filter-popup event handling   
    
 - **Approach decisions:**
 
 Pattern format — Patterns are stored as [pattern-string enabled-boolean] pairs to match the console filter's data model, enabling each entry to be toggled without changing the prefs schema shape. Inputs are trimmed and stored directly as directory or path patterns. Matching is performed against complete `/`-separated path segments so a pattern such as `test` matches `/test/foo.lua` but not `latest_scores.lua` or `/testing/foo.lua`.
 
 State and refilter mechanism — The exclusion patterns, popup state, and global filtering flag are stored as keys in the select-list dialog's existing cljfx state map. The dialog's :filter-key-fn includes the filter term, exclusion patterns, and filtering flag, so popup changes trigger normal re-rendering and re-filtering without a separate side-channel refilter atom.
+
+Shared filter UI — The exclusion popup is implemented in a dedicated `editor.filter-popup` namespace and reused by both Open Asset and Search in Files. This prevents the two interfaces from developing separate behavior and keeps the popup rendering, badge calculation, pattern mutations, and preference callbacks in one place.
+
+Global shared settings — Custom patterns, the global filtering flag, the Libraries option, and the Hidden Files option are stored under shared `[:search ...]` preferences. Both dialogs read and update the same values, so changing a setting in either location immediately affects the other.
+
+Default exclusions — "Libraries" and "Hidden Files" are pinned options rather than editable custom patterns. Libraries reuse the existing library-restriction behavior, while Hidden Files uses `hidden-path-segment?` to detect dot-prefixed path segments such as `.vscode/` without treating ordinary dots in the middle of a filename or directory segment as hidden.
+
+Localization — User-facing labels and prompts are retrieved from `en.editor_localization` rather than being hardcoded in the Clojure UI code.
 
 Popup positioning — Uses window-top-left anchor location (opposite of the console which uses window-bottom-left) because the filter button is in the dialog header (top) rather than a toolbar at the bottom of the screen.
 
@@ -206,23 +245,26 @@ This is opened as a draft PR to make the proposed approach easier to review befo
 
 ### Technical Changes
 
-- Adds [:search :exclude-patterns] as an array of [pattern enabled] pairs and [:search :filtering] as a boolean to the prefs schema, persisted per project in .editor_settings.
-- Extends make-select-list-dialog with :extra-initial-state, :extra-event-handler, :refilter-atom, and :header-extra-desc-fn so callers can add sidebar/header UI and custom events without changing the dialog internals.
-- Updates resource-dialog/make to optionally build an exclusion filter UI when supplied with exclusion-pattern atoms. The UI uses a cljfx popup with an enabled checkbox list and add-pattern text field.
-- Applies exclusion patterns inside the existing resource dialog filter-fn, reading from the exclusion-patterns atom on each filter call.
-- Uses a refilter-atom so changes made in the popup immediately rerun filtering.
-- Normalizes added exclusions by storing the pattern directly, without a leading !, since all stored patterns are exclusions by definition.
-- Adds compile-exclude-pred as a simple predicate over enabled pattern pairs.
-- Creates and saves exclusion-pattern prefs through query-and-open!, then passes the required atoms and callbacks through to resource-dialog/make.
-- Applies the same exclusion patterns to Search in Files by accepting exclude patterns in make-search-data-future and reading them from prefs in search_results_view.
-- Adds tests for exclusion predicate behavior and Search in Files filtering.
+- Adds shared per-project search preferences for custom exclusion patterns, the global custom-pattern toggle, library exclusion, and hidden-file exclusion.
+- Uses whole `/`-separated path-segment matching for custom exclusions so a pattern such as `test` does not incorrectly match `latest_scores.lua` or `/testing/`.
+- Adds `editor.resource/hidden-path-segment?` to identify dot-prefixed files and folders such as `.vscode/`.
+- Extracts the reusable Filter button, popup rendering, badge count, pattern-list mutations, and callbacks into a shared `editor.filter-popup` namespace.
+- Adds the same Filter button and popup to both Open Asset and Search in Files.
+- Shares all filter state between Open Asset and Search in Files, so changes made in either dialog apply globally.
+- Replaces the standalone "Search Inside Libraries" checkbox with a pinned "Libraries" option in the shared popup.
+- Adds a pinned "Hidden Files" option for excluding dot-prefixed path segments.
+- Rebuilds and restarts Search in Files when exclusion settings change so the visible results immediately reflect the current configuration.
+- Localizes the Filter button, section labels, default-option labels, global toggle, and add-pattern prompt in the English editor localization file.
+- Adds unit and integration coverage for whole-segment matching, hidden-path detection, popup badge state, popup events, pattern mutations, and preference callbacks.
 
 
 **Maintainer Feedback:**
 - July 14, 2026: Received initial feedback to remove a stray unintended file change, reduce the four atoms previously created in query-and-open!, integrate the filter state into the cljfx rendering mechanism, and replace raw substring matching with actual directory/path-segment matching.
 - July 14, 2026: Addressed the feedback by removing the stray change, moving the popup and exclusion state into the dialog's existing state map, eliminating the side-channel refilter atom, extracting the shared editor.resource/compile-exclude-patterns-pred function, applying it to both Open Asset and Search in Files, and adding regression tests for whole and multi-segment paths.
+- July 21, 2026: Received a second round of feedback after the maintainer cloned and tested the branch. The requested changes included resolving merge conflicts, localizing the filter UI, making the global filtering toggle apply consistently to Search in Files, adding the Filter popup to Search in Files, and considering shared default options for Libraries and Hidden Files.
+- July 21, 2026: Addressed the feedback by resolving the conflicts, adding English localization entries, sharing the same filter state and popup between Open Asset and Search in Files, replacing the standalone library checkbox with a shared Libraries option, adding a Hidden Files option, restarting active file searches when settings change, and adding unit tests for the shared popup and hidden-path logic.
 
-**Status:** Awaiting follow-up review after implementing initial feedback
+**Status:** Awaiting follow-up review after implementing the second round of feedback
 
 ---
 
